@@ -22,17 +22,20 @@ public class LongEventMain {
         Disruptor<LongEvent> disruptor = new Disruptor<>(
                 new LongEventFactory(), bufferSize, DaemonThreadFactory.INSTANCE, ProducerType.SINGLE, new BlockingWaitStrategy());
 
-        // Connect the handler
+        // Common handler
         LongEventHandler commonEventHandler = new LongEventHandler();
 
-        EventHandler<LongEvent> initEventHandler = (event, sequence, endOfBatch) -> commonEventHandler.onEvent(event, 0, false);
-        disruptor.handleEventsWith(initEventHandler);
+        EventHandler<LongEvent> stepOne = (event, sequence, endOfBatch) -> commonEventHandler.onEvent(event, 0, false);
+        disruptor.handleEventsWith(stepOne);
 
-        WorkHandler<LongEvent> workHandler3 = event -> commonEventHandler.onEvent(event, 3, false);
-        WorkHandler<LongEvent> workHandler1 = event -> commonEventHandler.onEvent(event, 1, false);
+        // Workers for parallel processing Step 2.
+        WorkHandler<LongEvent> step2worker3 = event -> commonEventHandler.onEvent(event, 3, false);
+        WorkHandler<LongEvent> step2worker1 = event -> commonEventHandler.onEvent(event, 1, false);
 
-        disruptor.after(initEventHandler).handleEventsWithWorkerPool(workHandler3, workHandler1)
-                .handleEventsWith((EventHandler<LongEvent>) (event, sequence, endOfBatch) -> commonEventHandler.onEvent(event, 5, true));
+        disruptor.after(stepOne)
+                .handleEventsWithWorkerPool(step2worker3, step2worker1) // parallel processing
+                .handleEventsWith( // final process
+                        (EventHandler<LongEvent>) (event, sequence, endOfBatch) -> commonEventHandler.onEvent(event, 5, true));
 
         // Start the Disruptor, starts all threads running
         disruptor.start();
